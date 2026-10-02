@@ -12,7 +12,7 @@ didn't finish, a mount that's genuinely broken, a SMART attribute
 trending up, a backup that completed cleanly. Each payload looks like:
 
 ```json
-{"host": "naples", "unit": "mergerfs-balance", "severity": "warning", "message": "naples: mergerfs-balance.service failed -- run: storage-tiering-status.sh"}
+{"host": "naples", "unit": "mergerfs-balance", "severity": "warning", "message": "mergerfs-balance.service failed -- run: /opt/homelab-ops-live/storage-tiering/storage-tiering-status.sh"}
 ```
 
 `severity` is one of `info`, `warning`, or `critical` -- a flat,
@@ -66,12 +66,13 @@ grouped by severity into whichever channel you configured.
 
 ## Design notes
 
-See [homelab-ops](https://github.com/bdelima/homelab-ops)'s own
-Backup System Design documentation for the full reasoning behind the
-severity model (why three flat levels instead of per-module sets),
-the JSON payload shape, and why some scripts (`run-backup.sh`,
-`smart-check.sh`, `mount-healthcheck.sh`) call `mqtt-alert.sh` directly
-rather than relying solely on the generic `OnFailure=` wrapper.
+See homelab-ops's
+[module architecture doc, section 6 ("Alert wiring and severity")](https://github.com/bdelima/homelab-ops/blob/main/docs/module-architecture.md#6-alert-wiring-and-severity)
+for the full reasoning behind the severity model (why three flat levels
+instead of per-module sets), the JSON payload shape, and why some
+scripts (`run-backup.sh`, `smart-check.sh`, `mount-healthcheck.sh`) call
+`mqtt-alert.sh` directly rather than relying solely on the generic
+`OnFailure=` wrapper.
 
 This repo follows the same blueprint-bundling pattern as
 [ha-portainer-dashboard](https://github.com/bdelima/ha-portainer-dashboard)'s
