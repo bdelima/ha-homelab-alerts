@@ -1,0 +1,51 @@
+name: Release on version bump
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - custom_components/homelab_alerts/manifest.json
+      - .github/workflows/release-on-version-bump.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read version from manifest
+        id: ver
+        run: |
+          version=$(jq -r .version custom_components/homelab_alerts/manifest.json)
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Check whether release exists
+        id: exists
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "v${{ steps.ver.outputs.version }}" >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Package integration
+        if: steps.exists.outputs.exists == 'false'
+        run: |
+          cd custom_components/homelab_alerts
+          zip -r ../../homelab_alerts.zip .
+
+      - name: Create release
+        if: steps.exists.outputs.exists == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "v${{ steps.ver.outputs.version }}" homelab_alerts.zip \
+            --target "${{ github.sha }}" \
+            --title "v${{ steps.ver.outputs.version }}" \
+            --generate-notes
