@@ -30,17 +30,18 @@ class HomelabAlertsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         if user_input is not None:
             # There's no supported way for a config flow to hand the
-            # browser off to the automation editor on completion (same
-            # conclusion ha-portainer-dashboard's config_flow.py reached,
-            # and for the same reason: no query param on the automation
-            # editor, and the my.home-assistant.io blueprint_import
-            # redirect is for importing a blueprint from a URL, not
-            # creating an automation from one already installed
-            # locally). A one-time persistent notification with a direct
-            # link is the closest available nudge. The link path is
-            # /config/automation/dashboard -- singular "automation", the
-            # real frontend route; an earlier version used the plural
-            # form, which isn't a route and opened a blank page.
+            # browser off to the automation editor on completion: the
+            # frontend passes "create from this blueprint" to the editor
+            # through in-memory state, not a URL or query param, so no link
+            # can open that screen directly. The closest available nudge
+            # is a one-time persistent notification linking to the
+            # Blueprints page, where clicking the "Homelab Alerts" row
+            # opens the editor already pre-filled with this blueprint.
+            #
+            # Route note: the frontend's config routes are singular
+            # (/config/blueprint, /config/automation). An earlier version
+            # of this link used the plural /config/automations/dashboard,
+            # which isn't a route and opened a blank page.
             await self.hass.services.async_call(
                 "persistent_notification",
                 "create",
@@ -50,10 +51,9 @@ class HomelabAlertsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     "message": (
                         "Setup is complete. To actually route alerts to "
                         "your phone, create an automation from the "
-                        "bundled blueprint: "
-                        "[Automations](/config/automation/dashboard) "
-                        "-> **Add Automation** -> **Use Blueprint** -> "
-                        '"Homelab Alerts".'
+                        "bundled blueprint: open "
+                        "[Blueprints](/config/blueprint/dashboard) and "
+                        'click **"Homelab Alerts"**.'
                     ),
                 },
             )
