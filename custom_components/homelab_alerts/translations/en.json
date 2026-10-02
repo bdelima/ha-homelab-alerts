@@ -1,0 +1,13 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Homelab Alerts",
+        "description": "One-time setup, no fields required. This installs the bundled automation blueprint -- after setup, go to Automations -> Add Automation -> Use Blueprint -> \"Homelab Alerts\" to pick your notify device(s) and configure each severity's Android channel."
+      }
+    },
+    "abort": {
+      "already_configured": "Homelab Alerts is already set up."
+    }
+  }
+}

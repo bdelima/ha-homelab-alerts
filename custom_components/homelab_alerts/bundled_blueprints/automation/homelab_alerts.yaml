@@ -1,0 +1,186 @@
+alias: "Homelab Alerts"
+blueprint:
+  name: "Homelab Alerts"
+  description: >-
+    Routes homelab-ops's generic MQTT alerting (bdelima/homelab-ops --
+    mqtt-alert.sh / homelab-alert@.service, plus a few scripts that
+    publish directly for their own internal non-binary states) to a
+    phone push, with the severity in each alert's own JSON payload
+    picking which Android notification channel it lands on. Installed
+    automatically by the Homelab Alerts integration -- this file is
+    regenerated on every integration load, so don't hand-edit this
+    deployed copy.
+
+    Every alert publishes to an MQTT topic under homelab/alerts/<unit>
+    with a JSON payload: {"host", "unit", "severity", "message"}, where
+    severity is one of info/warning/critical. This blueprint triggers on
+    the whole homelab/alerts/+ wildcard rather than one topic per alert
+    source, so a new alert source on the homelab-ops side needs zero
+    changes here -- it only ever needs a severity, which it already
+    carries.
+
+    Three severities, not per-module channel sets: a module decides its
+    own severity for a given event (that's its "say" in notification
+    behavior), but the channel/Do-Not-Disturb-bypass choice lives here,
+    once per severity, the same way ha-portainer-dashboard's three
+    category channels (Updates/Trouble/Stale Devices) work -- see that
+    blueprint for the precedent this one follows. Once a channel exists
+    on your phone, Android's own per-channel settings (sound,
+    importance, lock-screen visibility, or silencing it entirely) are
+    fully yours to adjust afterward -- this blueprint only creates the
+    channel and routes to it, it doesn't try to encode "how annoying"
+    beyond the bypass-DND choice below, which needs to be explicit since
+    it's the one thing Android's own channel settings can't grant
+    after the fact.
+  domain: automation
+  input:
+    notify_device:
+      name: Notify device(s)
+      description: >-
+        The mobile_app device(s) every homelab alert goes to. Select more
+        than one to push to multiple phones/tablets.
+      selector:
+        device:
+          filter:
+            integration: mobile_app
+          multiple: true
+
+    info_channel:
+      name: Info Notification Channel
+      description: >-
+        Android notification channel for info-severity alerts (e.g. a
+        clean backup completion, or mount-healthcheck deferring to an
+        in-progress backup). Customize sound, importance, and
+        lock-screen visibility for this channel in your phone's own
+        notification settings after it's first created -- or turn it off
+        entirely there if routine "everything's fine" pings turn out to
+        be more noise than reassurance. No effect on iOS.
+      default: "Homelab Info"
+      selector:
+        select:
+          options:
+            - "Homelab Info"
+          custom_value: true
+    info_bypass_dnd:
+      name: Info -- Bypass Do Not Disturb
+      description: >-
+        When on, info pushes use Android's reserved alarm_stream channel
+        instead of the channel above. alarm_stream plays at alarm volume
+        and bypasses silent mode and Do Not Disturb, the same way a phone
+        alarm clock does -- it's a channel shared phone-wide with any
+        other app or automation that also uses it, not exclusive to this
+        integration. Off by default, and there's essentially never a
+        reason to turn this on for info-severity alerts.
+      default: false
+      selector:
+        boolean: {}
+
+    warning_channel:
+      name: Warning Notification Channel
+      description: >-
+        Android notification channel for warning-severity alerts (e.g.
+        a backup that completed but flagged issues, a SMART attribute
+        trending up, routine disk-space/storage-tiering housekeeping
+        that needs a look but isn't broken). Customize sound,
+        importance, and lock-screen visibility in your phone's own
+        notification settings after it's first created. No effect on
+        iOS.
+      default: "Homelab Warning"
+      selector:
+        select:
+          options:
+            - "Homelab Warning"
+          custom_value: true
+    warning_bypass_dnd:
+      name: Warning -- Bypass Do Not Disturb
+      description: >-
+        When on, warning pushes use Android's reserved alarm_stream
+        channel instead of the channel above. Shared phone-wide, not
+        exclusive to this integration. Off by default.
+      default: false
+      selector:
+        boolean: {}
+
+    critical_channel:
+      name: Critical Notification Channel
+      description: >-
+        Android notification channel for critical-severity alerts (a
+        backup that never finished, a real mount failure, a SMART drive
+        failure, a btrfs scrub finding uncorrectable errors). Customize
+        sound, importance, and lock-screen visibility in your phone's
+        own notification settings after it's first created. No effect on
+        iOS.
+      default: "Homelab Critical"
+      selector:
+        select:
+          options:
+            - "Homelab Critical"
+          custom_value: true
+    critical_bypass_dnd:
+      name: Critical -- Bypass Do Not Disturb
+      description: >-
+        When on, critical pushes use Android's reserved alarm_stream
+        channel instead of the channel above. alarm_stream plays at
+        alarm volume and bypasses silent mode and Do Not Disturb, the
+        same way a phone alarm clock does -- it's a channel shared
+        phone-wide with any other app or automation that also uses it,
+        not exclusive to this integration, and its reliability varies by
+        Android version/OEM. Off by default, same reasoning
+        ha-portainer-dashboard's Trouble channel landed on after
+        github.com/bdelima/ha-portainer-dashboard/issues/1 -- opt in
+        deliberately rather than having every critical alert ring like
+        an alarm clock.
+      default: false
+      selector:
+        boolean: {}
+
+trigger:
+  - trigger: mqtt
+    topic: homelab/alerts/+
+
+action:
+  - variables:
+      notify_devices: !input notify_device
+      notify_services: "{{ notify_devices | map('device_attr', 'name') | map('slugify') | map('regex_replace', '^', 'notify.mobile_app_') | list }}"
+      # mqtt-alert.sh is the only publisher and always sends valid JSON
+      # (it validates severity before publishing) -- from_json is used
+      # directly rather than defensively, same trust level this project
+      # gives its own other MQTT payloads.
+      payload: "{{ trigger.payload | from_json }}"
+      alert_host: "{{ payload.host }}"
+      alert_unit: "{{ payload.unit }}"
+      alert_severity: "{{ payload.severity }}"
+      alert_message: "{{ payload.message }}"
+      info_channel_name: !input info_channel
+      info_bypass_dnd: !input info_bypass_dnd
+      info_channel: "{{ 'alarm_stream' if info_bypass_dnd else info_channel_name }}"
+      warning_channel_name: !input warning_channel
+      warning_bypass_dnd: !input warning_bypass_dnd
+      warning_channel: "{{ 'alarm_stream' if warning_bypass_dnd else warning_channel_name }}"
+      critical_channel_name: !input critical_channel
+      critical_bypass_dnd: !input critical_bypass_dnd
+      critical_channel: "{{ 'alarm_stream' if critical_bypass_dnd else critical_channel_name }}"
+      # Anything other than info/warning/critical (shouldn't happen --
+      # mqtt-alert.sh rejects an invalid severity before it ever
+      # publishes) falls back to the warning channel rather than being
+      # silently dropped.
+      resolved_channel: >-
+        {{ critical_channel if alert_severity == 'critical'
+           else info_channel if alert_severity == 'info'
+           else warning_channel }}
+  - repeat:
+      for_each: "{{ notify_services }}"
+      sequence:
+        - action: "{{ repeat.item }}"
+          data:
+            title: "{{ alert_host }}: {{ alert_unit }}"
+            message: "{{ alert_message }}"
+            data:
+              tag: "homelab_alert_{{ alert_unit }}"
+              channel: "{{ resolved_channel }}"
+              actions:
+                - action: "dismiss"
+                  title: "Dismiss"
+
+mode: queued
+max: 10
