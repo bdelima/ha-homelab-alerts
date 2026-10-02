@@ -37,7 +37,10 @@ class HomelabAlertsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             # redirect is for importing a blueprint from a URL, not
             # creating an automation from one already installed
             # locally). A one-time persistent notification with a direct
-            # link is the closest available nudge.
+            # link is the closest available nudge. The link path is
+            # /config/automation/dashboard -- singular "automation", the
+            # real frontend route; an earlier version used the plural
+            # form, which isn't a route and opened a blank page.
             await self.hass.services.async_call(
                 "persistent_notification",
                 "create",
@@ -48,7 +51,7 @@ class HomelabAlertsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         "Setup is complete. To actually route alerts to "
                         "your phone, create an automation from the "
                         "bundled blueprint: "
-                        "[Automations](/config/automations/dashboard) "
+                        "[Automations](/config/automation/dashboard) "
                         "-> **Add Automation** -> **Use Blueprint** -> "
                         '"Homelab Alerts".'
                     ),
