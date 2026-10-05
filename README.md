@@ -1,8 +1,8 @@
 # Homelab Alerts
 
 A small Home Assistant custom integration that turns [homelab-ops](https://github.com/bdelima/homelab-ops)'s
-MQTT alerting into phone pushes, routed to the right Android notification
-channel by severity.
+MQTT alerting into phone pushes and Home Assistant persistent
+notifications, routed by severity.
 
 ## What it does
 
@@ -33,6 +33,13 @@ the actual behavior lives:
   Android's reserved `alarm_stream` channel instead -- the same mechanism
   a phone alarm clock uses, shared phone-wide, not exclusive to this
   integration.
+- Each severity also has two on/off toggles: **Mobile Notification** (the
+  phone push) and **Persistent Notification** (an entry in Home
+  Assistant's own notification panel, the bell in the sidebar). Both are
+  on by default. A persistent notification is created fresh for every
+  alert and stays until you dismiss it, so an alert that repeats adds a
+  new entry each time. With Mobile Notification off for a severity, that
+  severity's channel and Bypass-Do-Not-Disturb settings are simply unused.
 - Once a channel exists on your phone, Android's own per-channel
   notification settings (sound, importance, lock-screen visibility, or
   turning a whole severity off) are yours to adjust at any time -- this
@@ -54,15 +61,25 @@ iOS devices in this household to build the equivalent for.
    blueprint.
 3. **Settings -> Automations & Scenes -> Add Automation -> Use Blueprint
    -> "Homelab Alerts".** Pick the mobile_app device(s) to notify, and
-   optionally rename each severity's channel or turn on its
-   Bypass-Do-Not-Disturb toggle. Save.
+   optionally rename each severity's channel, turn on its
+   Bypass-Do-Not-Disturb toggle, or turn its Mobile and Persistent
+   notifications on or off. Save.
 4. On the homelab-ops side, make sure your MQTT broker config
    (`mqtt.conf`) matches whatever broker this Home Assistant instance's
    own MQTT integration is using -- see homelab-ops's own docs for that
    half.
 
 That's it. Any alert homelab-ops publishes now reaches your phone,
-grouped by severity into whichever channel you configured.
+grouped by severity into whichever channel you configured, and shows up
+in Home Assistant's notification panel, for each severity whose toggles
+are on.
+
+Upgrading from 1.0.x: the new toggles default to Mobile on (so phone
+pushes behave exactly as before) and Persistent on (so you will start
+seeing persistent notifications for every severity until you turn them
+off). Existing automations pick up the new defaults without being
+edited, once Home Assistant restarts and the integration re-installs the
+updated blueprint.
 
 ## Design notes
 
