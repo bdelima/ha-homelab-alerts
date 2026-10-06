@@ -281,7 +281,7 @@ action:
                 title: "{{ alert_host }}: {{ alert_unit }}"
                 message: "{{ alert_message }}"
                 data:
-                  tag: "homelab_alert_{{ alert_unit }}"
+                  tag: "homelab_alert_{{ alert_host }}_{{ alert_unit }}"
                   channel: "{{ resolved_channel }}"
                   actions:
                     - action: "dismiss"
