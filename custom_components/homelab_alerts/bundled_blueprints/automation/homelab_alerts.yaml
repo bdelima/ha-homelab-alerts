@@ -5,8 +5,9 @@ blueprint:
     Routes homelab-ops's generic MQTT alerting (bdelima/homelab-ops --
     mqtt-alert.sh / homelab-alert@.service, plus a few scripts that
     publish directly for their own internal non-binary states) to a
-    phone push, with the severity in each alert's own JSON payload
-    picking which Android notification channel it lands on. Installed
+    phone push and/or a Home Assistant persistent notification, chosen
+    per severity, with the severity in each alert's own JSON payload
+    picking which Android notification channel the phone push lands on. Installed
     automatically by the Homelab Alerts integration -- this file is
     regenerated on every integration load, so don't hand-edit this
     deployed copy.
@@ -32,18 +33,47 @@ blueprint:
     beyond the bypass-DND choice below, which needs to be explicit since
     it's the one thing Android's own channel settings can't grant
     after the fact.
+
+    Each severity also has two on/off toggles: Mobile Notification (the
+    phone push) and Persistent Notification (an entry in Home
+    Assistant's own notification panel, the bell in the sidebar). Both
+    are on by default. A persistent notification is created fresh for
+    every alert and stays until you dismiss it, so a repeating alert
+    adds a new entry each time.
   domain: automation
   input:
     notify_device:
       name: Notify device(s)
       description: >-
         The mobile_app device(s) every homelab alert goes to. Select more
-        than one to push to multiple phones/tablets.
+        than one to push to multiple phones/tablets. Only used for the
+        severities whose Mobile Notification toggle is on, but still
+        required.
       selector:
         device:
           filter:
             integration: mobile_app
           multiple: true
+
+    info_mobile:
+      name: Info -- Mobile Notification
+      description: >-
+        Send info-severity alerts as a push to the device(s) above. On by
+        default. Turn off to stop info alerts reaching your phone at all;
+        the channel and Bypass Do Not Disturb settings for info below
+        only apply while this is on.
+      default: true
+      selector:
+        boolean: {}
+    info_persistent:
+      name: Info -- Persistent Notification
+      description: >-
+        Also create a Home Assistant persistent notification for
+        info-severity alerts (the bell in the sidebar). Each alert adds
+        a new entry that stays until you dismiss it. On by default.
+      default: true
+      selector:
+        boolean: {}
 
     info_channel:
       name: Info Notification Channel
@@ -75,6 +105,26 @@ blueprint:
       selector:
         boolean: {}
 
+    warning_mobile:
+      name: Warning -- Mobile Notification
+      description: >-
+        Send warning-severity alerts as a push to the device(s) above. On by
+        default. Turn off to stop warning alerts reaching your phone at all;
+        the channel and Bypass Do Not Disturb settings for warning below
+        only apply while this is on.
+      default: true
+      selector:
+        boolean: {}
+    warning_persistent:
+      name: Warning -- Persistent Notification
+      description: >-
+        Also create a Home Assistant persistent notification for
+        warning-severity alerts (the bell in the sidebar). Each alert adds
+        a new entry that stays until you dismiss it. On by default.
+      default: true
+      selector:
+        boolean: {}
+
     warning_channel:
       name: Warning Notification Channel
       description: >-
@@ -98,6 +148,26 @@ blueprint:
         channel instead of the channel above. Shared phone-wide, not
         exclusive to this integration. Off by default.
       default: false
+      selector:
+        boolean: {}
+
+    critical_mobile:
+      name: Critical -- Mobile Notification
+      description: >-
+        Send critical-severity alerts as a push to the device(s) above. On by
+        default. Turn off to stop critical alerts reaching your phone at all;
+        the channel and Bypass Do Not Disturb settings for critical below
+        only apply while this is on.
+      default: true
+      selector:
+        boolean: {}
+    critical_persistent:
+      name: Critical -- Persistent Notification
+      description: >-
+        Also create a Home Assistant persistent notification for
+        critical-severity alerts (the bell in the sidebar). Each alert adds
+        a new entry that stays until you dismiss it. On by default.
+      default: true
       selector:
         boolean: {}
 
@@ -151,6 +221,12 @@ action:
       alert_unit: "{{ payload.unit }}"
       alert_severity: "{{ payload.severity }}"
       alert_message: "{{ payload.message }}"
+      info_mobile: !input info_mobile
+      info_persistent: !input info_persistent
+      warning_mobile: !input warning_mobile
+      warning_persistent: !input warning_persistent
+      critical_mobile: !input critical_mobile
+      critical_persistent: !input critical_persistent
       info_channel_name: !input info_channel
       info_bypass_dnd: !input info_bypass_dnd
       info_channel: "{{ 'alarm_stream' if info_bypass_dnd else info_channel_name }}"
@@ -168,19 +244,48 @@ action:
         {{ critical_channel if alert_severity == 'critical'
            else info_channel if alert_severity == 'info'
            else warning_channel }}
-  - repeat:
-      for_each: "{{ notify_services }}"
-      sequence:
-        - action: "{{ repeat.item }}"
-          data:
-            title: "{{ alert_host }}: {{ alert_unit }}"
-            message: "{{ alert_message }}"
-            data:
-              tag: "homelab_alert_{{ alert_unit }}"
-              channel: "{{ resolved_channel }}"
-              actions:
-                - action: "dismiss"
-                  title: "Dismiss"
+      # Same fallback as the channel above: an unexpected severity is
+      # treated as warning, so it still reaches whichever outputs the
+      # warning toggles allow instead of being dropped.
+      send_mobile: >-
+        {{ critical_mobile if alert_severity == 'critical'
+           else info_mobile if alert_severity == 'info'
+           else warning_mobile }}
+      send_persistent: >-
+        {{ critical_persistent if alert_severity == 'critical'
+           else info_persistent if alert_severity == 'info'
+           else warning_persistent }}
+  # Persistent notification first: it is local to Home Assistant and does
+  # not depend on a phone being reachable, so it still lands if the mobile
+  # push below fails. No notification_id on purpose -- Home Assistant then
+  # generates a unique one, so every alert adds a new entry rather than
+  # replacing the previous one. The severity goes in the title because a
+  # persistent notification has no channel to carry it.
+  - if:
+      - condition: template
+        value_template: "{{ send_persistent }}"
+    then:
+      - action: persistent_notification.create
+        data:
+          title: "{{ alert_host }}: {{ alert_unit }} ({{ alert_severity }})"
+          message: "{{ alert_message }}"
+  - if:
+      - condition: template
+        value_template: "{{ send_mobile }}"
+    then:
+      - repeat:
+          for_each: "{{ notify_services }}"
+          sequence:
+            - action: "{{ repeat.item }}"
+              data:
+                title: "{{ alert_host }}: {{ alert_unit }}"
+                message: "{{ alert_message }}"
+                data:
+                  tag: "homelab_alert_{{ alert_unit }}"
+                  channel: "{{ resolved_channel }}"
+                  actions:
+                    - action: "dismiss"
+                      title: "Dismiss"
 
 mode: queued
 max: 10
