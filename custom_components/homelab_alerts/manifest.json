@@ -1,7 +1,7 @@
 {
     "domain": "homelab_alerts",
     "name": "Homelab Alerts",
-    "version": "1.0.1",
+    "version": "1.1.0",
     "documentation": "https://github.com/bdelima/ha-homelab-alerts",
     "issue_tracker": "https://github.com/bdelima/ha-homelab-alerts/issues",
     "codeowners": ["@bdelima"],
