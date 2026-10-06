@@ -206,9 +206,29 @@ blueprint:
 
 trigger:
   - trigger: mqtt
+    id: alert
     topic: homelab/alerts/+
+  # A tap on the phone push's "Dismiss" button. The companion app reports
+  # every notification action tap to Home Assistant as a
+  # mobile_app_notification_action event; this trigger catches the
+  # "dismiss" ones so the tap reaches an automation run, the same way
+  # ha-portainer-dashboard's blueprint does (it triggers on that event
+  # for every action and falls through when nothing matches). The run
+  # does nothing -- see the condition at the top of `action`. In
+  # particular it sends no clear_notification, so no other device's
+  # notification is touched.
+  - trigger: event
+    id: dismiss_tap
+    event_type: mobile_app_notification_action
+    event_data:
+      action: dismiss
 
 action:
+  # Only the MQTT alert goes on to the steps below. They read
+  # trigger.payload, which a Dismiss tap does not have, so without this
+  # the tap's run would fail on the first step.
+  - condition: trigger
+    id: alert
   - variables:
       notify_devices: !input notify_device
       notify_services: "{{ notify_devices | map('device_attr', 'name') | map('slugify') | map('regex_replace', '^', 'notify.mobile_app_') | list }}"
