@@ -12,13 +12,13 @@ didn't finish, a mount that's genuinely broken, a SMART attribute
 trending up, a backup that completed cleanly. Each payload looks like:
 
 ```json
-{"host": "naples", "unit": "mergerfs-balance", "severity": "warning", "message": "mergerfs-balance.service failed -- run: /opt/homelab-ops-live/storage-tiering/storage-tiering-status.sh"}
+{"host": "naples", "unit": "mergerfs-balance", "severity": "warning", "message": "The mergerfs balance did not complete. Run ‘storage-tiering-status’ on naples for more information."}
 ```
 
 `severity` is one of `info`, `warning`, or `critical` -- a flat,
 shared vocabulary across every module, not a different set per module.
 Each module decides its own severity for a given event; this integration
-only decides what severity *sounds like* on your phone.
+only decides what severity *sounds and looks like* on your phone.
 
 This integration itself does almost nothing: on load, it installs a
 bundled automation blueprint into your HA config. The blueprint is where
@@ -28,6 +28,12 @@ the actual behavior lives:
   needed as new alert sources are added on the homelab-ops side).
 - Resolves the payload's severity to one of three Android notification
   channels -- Info / Warning / Critical by default, fully renameable.
+- Marks each severity so it reads at a glance: an emoji at the start of
+  the title (info ℹ️, warning ⚠️, critical ❗) and, on the phone push, a
+  matching Android status-bar icon and color (information / alert /
+  alert-circle, in blue / amber / red). The persistent notification's
+  title gets the same emoji. These are fixed in the blueprint, not
+  inputs; the status-bar icon and color are Android-only.
 - Each of those three channels has its own independent "Bypass Do Not
   Disturb" toggle (off by default). When on, that severity's pushes use
   Android's reserved `alarm_stream` channel instead -- the same mechanism

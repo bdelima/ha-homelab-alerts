@@ -40,6 +40,13 @@ blueprint:
     are on by default. A persistent notification is created fresh for
     every alert and stays until you dismiss it, so a repeating alert
     adds a new entry each time.
+
+    Each severity also has its own look, so it reads at a glance: an
+    emoji at the start of the title (info ℹ️, warning ⚠️, critical ❗),
+    and, on the phone push, a matching Android status-bar icon and
+    color (information / alert / alert-circle, in blue / amber / red).
+    The emoji appears on the persistent notification's title too. The
+    status-bar icon and color are Android-only, like the channels.
   domain: automation
   input:
     notify_device:
@@ -264,6 +271,21 @@ action:
         {{ critical_channel if alert_severity == 'critical'
            else info_channel if alert_severity == 'info'
            else warning_channel }}
+      # How each severity looks: a title emoji, plus the Android status-bar
+      # icon (a Material Design icon) and its color. Same fallback as the
+      # channel: an unexpected severity looks like warning.
+      severity_emoji: >-
+        {{ '❗' if alert_severity == 'critical'
+           else 'ℹ️' if alert_severity == 'info'
+           else '⚠️' }}
+      severity_icon: >-
+        {{ 'mdi:alert-circle' if alert_severity == 'critical'
+           else 'mdi:information' if alert_severity == 'info'
+           else 'mdi:alert' }}
+      severity_color: >-
+        {{ '#D32F2F' if alert_severity == 'critical'
+           else '#1976D2' if alert_severity == 'info'
+           else '#FFA000' }}
       # Same fallback as the channel above: an unexpected severity is
       # treated as warning, so it still reaches whichever outputs the
       # warning toggles allow instead of being dropped.
@@ -287,7 +309,7 @@ action:
     then:
       - action: persistent_notification.create
         data:
-          title: "{{ alert_host }}: {{ alert_unit }} ({{ alert_severity }})"
+          title: "{{ severity_emoji }} {{ alert_host }}: {{ alert_unit }} ({{ alert_severity }})"
           message: "{{ alert_message }}"
   - if:
       - condition: template
@@ -298,11 +320,13 @@ action:
           sequence:
             - action: "{{ repeat.item }}"
               data:
-                title: "{{ alert_host }}: {{ alert_unit }}"
+                title: "{{ severity_emoji }} {{ alert_host }}: {{ alert_unit }}"
                 message: "{{ alert_message }}"
                 data:
                   tag: "homelab_alert_{{ alert_host }}_{{ alert_unit }}"
                   channel: "{{ resolved_channel }}"
+                  notification_icon: "{{ severity_icon }}"
+                  color: "{{ severity_color }}"
                   actions:
                     - action: "dismiss"
                       title: "Dismiss"
